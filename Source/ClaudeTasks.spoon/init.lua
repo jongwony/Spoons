@@ -1,6 +1,6 @@
 -- ClaudeTasks.spoon
 -- Hammerspoon Spoon for Claude Code Task viewer
--- opt+. 핫키로 플로팅 윈도우에 태스크 목록 표시
+-- Toggle floating task viewer with opt+. hotkey
 
 local obj = {}
 
@@ -13,7 +13,7 @@ obj.homepage = "https://github.com/jongwony/ClaudeTasks.spoon"
 obj.spoonPath = hs.spoons.scriptPath()
 
 -- ============================================================================
--- 설정
+-- Configuration
 -- ============================================================================
 
 obj.config = {
@@ -39,7 +39,7 @@ obj.config = {
 
 local function discoverClaudePath()
     if obj.config.claudePath then return obj.config.claudePath end
-    -- GUI 앱은 PATH가 제한적이므로 일반적인 설치 경로를 직접 탐색
+    -- GUI apps have limited PATH, so search common install locations directly
     local candidates = {
         os.getenv("HOME") .. "/.local/bin/claude",
         "/usr/local/bin/claude",
@@ -69,7 +69,7 @@ local function getShell()
 end
 
 -- ============================================================================
--- 영속 상태 관리
+-- Persistent State Management
 -- ============================================================================
 
 obj.state = {
@@ -78,18 +78,18 @@ obj.state = {
 }
 
 -- ============================================================================
--- 내부 상태
+-- Internal State
 -- ============================================================================
 
 local webview = nil
 local pathWatcher = nil
 local refreshTimer = nil
 local isVisible = false
-local usercontent = nil  -- JS-Lua 브릿지
+local usercontent = nil  -- JS-Lua bridge
 local cwdCache = {}  -- sessionId -> cwd path cache
 
 -- ============================================================================
--- 유틸리티 함수
+-- Utility Functions
 -- ============================================================================
 
 local function log(message)
@@ -102,9 +102,9 @@ local function getTasksDir()
     return os.getenv("HOME") .. "/.claude/tasks"
 end
 
--- JSON 파싱 (간단한 구현 - 태스크 파일용)
+-- JSON parsing (simple implementation for task files)
 local function parseJSON(str)
-    -- hs.json 사용
+    -- Use hs.json
     local success, result = pcall(hs.json.decode, str)
     if success then
         return result
@@ -112,7 +112,7 @@ local function parseJSON(str)
     return nil
 end
 
--- 디렉토리 내 모든 항목 나열
+-- List all items in a directory
 local function listDir(path)
     local items = {}
     local handle = io.popen('ls -1 "' .. path .. '" 2>/dev/null')
@@ -125,7 +125,7 @@ local function listDir(path)
     return items
 end
 
--- 파일이 존재하는지 확인
+-- Check if a file exists
 local function fileExists(path)
     local f = io.open(path, "r")
     if f then
@@ -135,7 +135,7 @@ local function fileExists(path)
     return false
 end
 
--- 파일 내용 읽기
+-- Read file contents
 local function readFile(path)
     local f = io.open(path, "r")
     if f then
@@ -147,7 +147,7 @@ local function readFile(path)
 end
 
 -- ============================================================================
--- 상태 관리 함수
+-- State Management Functions
 -- ============================================================================
 
 local function loadState()
@@ -188,7 +188,7 @@ local function listSessionDirs()
     for _, sessionId in ipairs(allDirs) do
         local sessionDir = tasksDir .. "/" .. sessionId
         local files = listDir(sessionDir)
-        -- .json 파일이 하나라도 있으면 포함
+        -- Include if there's at least one .json file
         for _, filename in ipairs(files) do
             if filename:match("%.json$") then
                 table.insert(nonEmptySessions, sessionId)
@@ -201,7 +201,7 @@ local function listSessionDirs()
 end
 
 -- ============================================================================
--- CWD 추출 함수
+-- CWD Extraction Functions
 -- ============================================================================
 
 local function decodeCwdPath(encodedDir)
@@ -231,7 +231,7 @@ local function getCwdFromSessionId(sessionId)
 end
 
 -- ============================================================================
--- 태스크 로딩
+-- Task Loading
 -- ============================================================================
 
 local function loadAllTasks()
@@ -243,7 +243,7 @@ local function loadAllTasks()
         return tasks
     end
 
-    -- 특정 세션 ID가 설정되어 있으면 해당 세션만 로드
+    -- Load only specified session if taskListId is set
     local sessions = {}
     if obj.config.taskListId then
         sessions = {obj.config.taskListId}
@@ -273,7 +273,7 @@ local function loadAllTasks()
         end
     end
 
-    -- ID로 정렬 (숫자 우선, 문자열 후순)
+    -- Sort by ID (numeric first, then string)
     table.sort(tasks, function(a, b)
         local aNum = tonumber(a.id)
         local bNum = tonumber(b.id)
@@ -288,7 +288,7 @@ local function loadAllTasks()
 end
 
 -- ============================================================================
--- HTML 렌더링
+-- HTML Rendering
 -- ============================================================================
 
 local function escapeHtml(str)
@@ -335,7 +335,7 @@ local function generateHTML(tasks)
         end
     end
 
-    -- 세션 datalist 옵션 생성
+    -- Generate session datalist options
     local sessions = listSessionDirs()
     local sessionOptions = ''
     for _, sessionId in ipairs(sessions) do
@@ -428,7 +428,7 @@ local function generateHTML(tasks)
         .session-input::placeholder {
             color: #666;
         }
-        /* TaskCreate 폼 */
+        /* TaskCreate form */
         .create-form {
             background: rgba(255, 255, 255, 0.05);
             border-radius: 8px;
@@ -642,7 +642,7 @@ local function generateHTML(tasks)
         }
 
         function onSessionInputChange(input) {
-            // Enter 키 또는 blur 시 세션 변경
+            // Change session on Enter key or blur
             setSession(input.value);
         }
 
@@ -705,7 +705,7 @@ local function generateHTML(tasks)
             });
         }
 
-        // 키보드 단축키
+        // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 createTask();
@@ -746,7 +746,7 @@ local function generateHTML(tasks)
     </div>
 ]]
 
-    -- In Progress 섹션
+    -- In Progress section
     if #inProgressTasks > 0 then
         html = html .. [[
     <div class="section">
@@ -776,7 +776,7 @@ local function generateHTML(tasks)
         html = html .. "    </div>\n"
     end
 
-    -- Pending 섹션
+    -- Pending section
     if #pendingTasks > 0 then
         html = html .. [[
     <div class="section">
@@ -806,7 +806,7 @@ local function generateHTML(tasks)
         html = html .. "    </div>\n"
     end
 
-    -- Completed 섹션 (최대 5개만 표시)
+    -- Completed section (show max 5)
     if #completedTasks > 0 then
         local displayCount = math.min(5, #completedTasks)
         html = html .. [[
@@ -840,7 +840,7 @@ local function generateHTML(tasks)
         html = html .. "    </div>\n"
     end
 
-    -- 태스크가 없는 경우
+    -- When no tasks exist
     if #tasks == 0 then
         html = html .. [[
     <div class="empty">
@@ -858,7 +858,7 @@ local function generateHTML(tasks)
 end
 
 -- ============================================================================
--- WebView 관리
+-- WebView Management
 -- ============================================================================
 
 local function createUserContent()
@@ -895,14 +895,14 @@ local function createWebView()
         return webview
     end
 
-    -- JS-Lua 브릿지 생성
+    -- Create JS-Lua bridge
     createUserContent()
 
-    -- 화면 크기 가져오기
+    -- Get screen size
     local screen = hs.screen.mainScreen()
     local frame = screen:frame()
 
-    -- 오른쪽 하단에 위치
+    -- Position at bottom-right
     local rect = hs.geometry.rect(
         frame.x + frame.w - obj.config.width - obj.config.margin,
         frame.y + frame.h - obj.config.height - obj.config.margin,
@@ -913,13 +913,13 @@ local function createWebView()
     webview = hs.webview.new(rect, {}, usercontent)
     webview:windowStyle({"titled", "closable", "utility", "HUD"})
     webview:level(hs.drawing.windowLevels.floating)
-    webview:allowTextEntry(true)  -- 폼 입력 허용
+    webview:allowTextEntry(true)  -- Allow form input
     webview:allowGestures(false)
     webview:shadow(true)
     webview:alpha(0.98)
     webview:windowTitle("Claude Tasks")
 
-    -- 창 닫힐 때 상태 업데이트
+    -- Update state when window closes
     webview:deleteOnClose(false)
 
     log("WebView created with usercontent bridge")
@@ -936,7 +936,7 @@ local function refreshWebView()
 end
 
 -- ============================================================================
--- 파일 감시
+-- File Watching
 -- ============================================================================
 
 local function startPathWatcher()
@@ -944,13 +944,13 @@ local function startPathWatcher()
 
     local tasksDir = getTasksDir()
 
-    -- 디렉토리가 없으면 생성 대기
+    -- Wait for directory creation if it doesn't exist
     if not fileExists(tasksDir) then
         log("Tasks directory does not exist, will watch parent")
-        -- .claude 디렉토리 감시
+        -- Watch .claude directory
         local parentDir = os.getenv("HOME") .. "/.claude"
         pathWatcher = hs.pathwatcher.new(parentDir, function(paths)
-            -- tasks 디렉토리가 생성되면 재시작
+            -- Restart when tasks directory is created
             if fileExists(tasksDir) then
                 obj:stop()
                 obj:start()
@@ -960,7 +960,7 @@ local function startPathWatcher()
         return
     end
 
-    -- 모든 세션 디렉토리 감시
+    -- Watch all session directories
     local sessions = listDir(tasksDir)
     local watchPaths = {tasksDir}
 
@@ -971,7 +971,7 @@ local function startPathWatcher()
     pathWatcher = hs.pathwatcher.new(tasksDir, function(paths)
         log("File change detected: " .. table.concat(paths, ", "))
 
-        -- 디바운스: 빠른 연속 변경 시 마지막 것만 처리
+        -- Debounce: only process the last change in rapid succession
         if refreshTimer then
             refreshTimer:stop()
         end
@@ -999,7 +999,7 @@ local function stopPathWatcher()
 end
 
 -- ============================================================================
--- 공개 API
+-- Public API
 -- ============================================================================
 
 --- Initialize the Spoon
@@ -1009,7 +1009,7 @@ function obj:init()
     return self
 end
 
---- 태스크 뷰어 표시
+--- Show the task viewer
 function obj:show()
     if not webview then
         createWebView()
@@ -1031,7 +1031,7 @@ function obj:show()
     return self
 end
 
---- 태스크 뷰어 숨기기
+--- Hide the task viewer
 function obj:hide()
     if webview then
         webview:hide()
@@ -1041,7 +1041,7 @@ function obj:hide()
     return self
 end
 
---- 표시/숨기기 토글
+--- Toggle show/hide
 function obj:toggle()
     if isVisible then
         obj:hide()
@@ -1051,13 +1051,13 @@ function obj:toggle()
     return self
 end
 
---- 수동 새로고침
+--- Manual refresh
 function obj:refresh()
     refreshWebView()
     return self
 end
 
---- 세션 ID 설정
+--- Set session ID
 function obj:setTaskListId(id)
     local sessionId = (id ~= "" and id) or nil
     obj.state.currentTaskListId = sessionId
@@ -1065,16 +1065,16 @@ function obj:setTaskListId(id)
     saveState()
     log("Session changed to: " .. (sessionId or "none"))
 
-    -- 파일 감시 재시작 (새 세션에 맞게)
+    -- Restart file watcher for new session
     stopPathWatcher()
     startPathWatcher()
 
-    -- UI 새로고침
+    -- Refresh UI
     obj:refresh()
     return self
 end
 
---- 태스크 생성 (Claude CLI 사용)
+--- Create task (using Claude CLI)
 function obj:createTask(subject)
     local claudePath = discoverClaudePath()
     if not claudePath then
@@ -1100,12 +1100,12 @@ function obj:createTask(subject)
             log("Task creation failed. exitCode: " .. exitCode .. ", stderr: " .. (stderr or ""))
         end
 
-        -- UI 폼 리셋 (JS 호출)
+        -- Reset UI form (JS call)
         if webview then
             webview:evaluateJavaScript("resetForm()")
         end
 
-        -- 새로고침
+        -- Refresh
         obj:refresh()
     end, {
         "-p",
@@ -1117,13 +1117,13 @@ function obj:createTask(subject)
         task:setEnvironment(env)
     end
 
-    -- ~/.claude에서 실행
+    -- Run from ~/.claude
     task:setWorkingDirectory(os.getenv("HOME") .. "/.claude")
     task:start()
     return task
 end
 
---- Quick TaskUpdate (haiku 모델로 빠른 태스크 업데이트)
+--- Quick TaskUpdate (fast task update with haiku model)
 function obj:quickTaskUpdate(prompt)
     local taskListId = obj.state.currentTaskListId
     if not taskListId or taskListId == "" then
@@ -1137,7 +1137,7 @@ function obj:quickTaskUpdate(prompt)
         return
     end
 
-    -- 필수 환경변수 설정
+    -- Set required environment variables
     local env = {
         PATH = os.getenv("PATH") or "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
         HOME = os.getenv("HOME"),
@@ -1156,7 +1156,7 @@ function obj:quickTaskUpdate(prompt)
         if exitCode == 0 then
             local result = (stdout or ""):gsub("^%s+", ""):gsub("%s+$", "")
             if result == "" then result = "Done" end
-            -- 긴 결과는 잘라서 표시
+            -- Truncate long results
             if #result > 200 then
                 result = result:sub(1, 200) .. "..."
             end
@@ -1189,7 +1189,7 @@ function obj:quickTaskUpdate(prompt)
     hs.alert.show("Running Quick Task...", 1)
 end
 
---- Claude Code 세션 실행
+--- Launch Claude Code session
 function obj:launchClaudeWithTaskList()
     local taskListId = obj.state.currentTaskListId
     if not taskListId or taskListId == "" then
@@ -1221,7 +1221,7 @@ function obj:launchClaudeWithTaskList()
     hs.alert.show("Launching Claude...", 1)
 end
 
---- Claude Code 세션을 특정 cwd에서 실행
+--- Launch Claude Code session in specific working directory
 function obj:launchClaudeWithCwd(sessionId, cwd)
     if not sessionId or sessionId == "" then
         hs.alert.show("No session ID", 2)
@@ -1255,15 +1255,15 @@ function obj:launchClaudeWithCwd(sessionId, cwd)
     hs.alert.show("Launching Claude in " .. cwd:match("[^/]+$") .. "...", 1)
 end
 
---- 모듈 시작 (파일 감시 시작)
+--- Start module (begin file watching)
 function obj:start()
-    loadState()  -- 저장된 상태 로드
+    loadState()  -- Load saved state
     startPathWatcher()
     log("Claude Tasks module started")
     return self
 end
 
---- 모듈 중지
+--- Stop module
 function obj:stop()
     stopPathWatcher()
     if webview then
@@ -1279,7 +1279,7 @@ function obj:stop()
     return self
 end
 
---- 설정 업데이트
+--- Update configuration
 function obj:configure(options)
     if options then
         for k, v in pairs(options) do
@@ -1289,7 +1289,7 @@ function obj:configure(options)
     return self
 end
 
---- 현재 상태 반환
+--- Return current state
 function obj:status()
     local tasks = loadAllTasks()
     local pending = 0
